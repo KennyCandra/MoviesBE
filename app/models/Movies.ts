@@ -12,7 +12,7 @@ const MovieSchema = new Schema({
     },
     genre_ids: {
         type: Array,
-        required: true
+        required: true,
     },
     id: {
         type: Number,
