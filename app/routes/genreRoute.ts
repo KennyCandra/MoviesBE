@@ -5,7 +5,7 @@ import GenreController from "../controllers/GenreController";
 const router = Router();
 
 
-router.get('/' , GenreController.getGenres)
+router.get('/', GenreController.getGenres)
 
 
 export default router;

@@ -1,7 +1,11 @@
 import mongoose, { Schema } from "mongoose";
 
+interface ITopMovie {
+    movieId: mongoose.Types.ObjectId
+}
 
-const TheTopMovies = new Schema({
+
+const TheTopMovies = new Schema<ITopMovie>({
     movieId: {
         type: Schema.Types.ObjectId,
         ref: 'movies',

@@ -1,6 +1,11 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
 
-const genreSchema = new Schema({
+interface IGenre extends Document {
+    name: string
+    id: number
+}
+
+const genreSchema = new Schema<IGenre>({
     name: {
         type: String,
         required: true
@@ -12,6 +17,6 @@ const genreSchema = new Schema({
     }
 });
 
-const Genre = mongoose.model('Genre', genreSchema);
+const Genre = mongoose.model<IGenre>('Genre', genreSchema);
 
 export default Genre;

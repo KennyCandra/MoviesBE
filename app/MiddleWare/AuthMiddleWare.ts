@@ -1,0 +1,56 @@
+import { Request, Response, NextFunction } from "express";
+import { verifyToken } from "../helpers/verifyToken";
+import { sign } from "jsonwebtoken";
+import crypto from "crypto";
+import RefreshTokenModel, { IRefreshToken } from "../models/RefreshToken";
+
+declare module "express-serve-static-core" {
+  interface Request {
+    Authorization: string;
+    userId: string;
+  }
+}
+
+interface DecodedToken {
+  userId: string;
+  exp: number;
+}
+
+class Auth {
+  static async checkToken(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { accessToken } = req.cookies;
+
+      if (!accessToken) {
+        res.status(401).json({ message: "Not Authenticated" });
+        return;
+      }
+
+      const { decodedToken, expired } = await verifyToken(accessToken);
+
+      if (expired) {
+        res.status(401).json({ message: "Not Authenticated" });
+        return;
+      }
+
+      req.body.userId = (decodedToken as DecodedToken).userId;
+      req.body.decodedToken = decodedToken;
+      next();
+      return;
+
+
+    } catch (error) {
+      res.status(500).json({ message: "Authentication error" });
+    }
+  }
+}
+
+export default Auth;
+
+
+/*
+
+we are just checking the access token and if it is expired we are sending a 401 error
+and if it is not expired we are sending the decoded token to the next middleware
+
+*/

@@ -10,6 +10,7 @@ declare module "express-serve-static-core" {
         sort_by: string;
         with_genres: string[];
         page: string;
+        decodedToken: any;
     }
 }
 class Movies {
@@ -22,7 +23,7 @@ class Movies {
             }
             res.status(200).json({ message: 'we got you some movies', movies: movies });
         } catch (error) {
-            res.status(500).json({ message: 'Internal Server Error' });
+            next(error)
         }
     }
 
@@ -52,7 +53,7 @@ class Movies {
             }
             res.status(200).json({ message: 'we got you the movie', movie: movie });
         } catch (error) {
-            console.log(error);
+            next(error)
         }
     }
 
@@ -60,10 +61,10 @@ class Movies {
     static async searchMoviesHeader(req: Request, res: Response, next: NextFunction) {
         try {
             const { value } = req.query;
-            const movies: Movies =  await Movie.find({ title: { $regex: value, $options: 'i' } });
+            const movies: Movies = await Movie.find({ title: { $regex: value, $options: 'i' } });
             res.status(200).json({ message: 'we got you some movies', movies: movies });
         } catch (error) {
-            res.status(500).json({ message: 'Internal Server Error' });
+            next(error)
         }
     }
 }

@@ -1,7 +1,24 @@
-import mongoose, { Schema } from "mongoose";
+import mongoose, { Schema, Document, Types } from "mongoose";
 
+export interface IMovie extends Document {
+    adult: boolean;
+    backdrop_path: string;
+    genre_ids: number[];
+    id: number;
+    original_language: string;
+    original_title: string;
+    overview: string;
+    popularity: number;
+    poster_path: string;
+    release_date: string;
+    title: string;
+    video: boolean;
+    vote_average: number;
+    vote_count: number;
+    reviews: mongoose.Types.Array<Schema.Types.ObjectId>
+}
 
-const MovieSchema = new Schema({
+const MovieSchema = new Schema<IMovie>({
     adult: {
         type: Boolean,
         required: true
@@ -11,7 +28,7 @@ const MovieSchema = new Schema({
         required: true
     },
     genre_ids: {
-        type: Array,
+        type: [Number],
         required: true,
     },
     id: {
@@ -61,7 +78,6 @@ const MovieSchema = new Schema({
     }
 });
 
+const Movie = mongoose.model<IMovie>('movies', MovieSchema);
 
-const Movie = mongoose.model('movies', MovieSchema);
-
-export default Movie
+export default Movie;
