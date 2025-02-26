@@ -19,7 +19,7 @@ const List = new Schema<Ilist>({
     },
     movies: {
         type: [Schema.Types.ObjectId],
-        ref: 'Movies',
+        ref: 'movies',
         required: true
     },
     userId: {

@@ -1,30 +1,40 @@
 import { Router } from "express";
 import UserController from "../controllers/UserController";
-import Auth from "../MiddleWare/AuthMiddleWare";
 import { body } from "express-validator";
+import Auth from "../MiddleWare/AuthMiddleWare";
 
 const router = Router();
 
 router.post(
   "/signup",
-  [
-    body("name").isString().isLength({ min: 10 }),
-    body("email").isEmail(),
-    body("password").isLength({ min: 6 }),
-  ],
+  body("name")
+    .trim()
+    .isString()
+    .isLength({ min: 5, max: 50 })
+    .withMessage("Name must be between 5 and 50 characters long"),
+  body("email")
+    .trim()
+    .normalizeEmail()
+    .isEmail()
+    .withMessage("Invalid email address"),
+  body("password")
+    .isLength({ min: 6, max: 100 })
+    .withMessage("Password must be at least 6 characters long and contain at least one letter and one number"),
   UserController.signUp
 );
 
 router.post("/login", UserController.login);
 
-router.post("/watchlist/add", Auth.checkToken, UserController.addToWatchList);
+router.post("/watchlist/add", UserController.addToWatchList);
 
-router.get("/watchlist/:userId", Auth.checkToken, UserController.getWatchList);
+router.delete('/watchlist/remove', Auth.checkToken, UserController.removeFromWatchList)
 
-router.get("/check-token", UserController.checkToken);
-
-router.get("/user", Auth.checkToken, UserController.getUser);
+router.get("/watchlist/:userId", UserController.fetchWatchList);
 
 router.get("/refresh-token", UserController.sendRefreshToken);
+
+router.delete("/logout", UserController.logout);
+
+router.get("/", Auth.checkToken, UserController.getUser);
 
 export default router;

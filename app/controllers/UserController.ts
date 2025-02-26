@@ -8,6 +8,8 @@ import crypto from "crypto";
 import createHttpError from "http-errors";
 import RefreshTokenModel from "../models/RefreshToken";
 import { verifyToken } from "../helpers/verifyToken";
+import mongoose from "mongoose";
+
 declare module "express-serve-static-core" {
   interface Request {
     sort_by: string;
@@ -16,11 +18,6 @@ declare module "express-serve-static-core" {
     decodedToken: any;
   }
 }
-
-const refreshTokenString =
-  "3ad024f6ed910bd47b35e132a4876f372d0031d2b0f2347cf4149547688c093a45bbe68bd34389beb02a8b8db104b002d59102606634754b1c877c4f63714d8c";
-const accessTokenString =
-  "a2b3294e0a740f21bb3d78021eaea67d0e2c09a7c4767f37baa689136a1081a4abab27f4b7fa0fdda2936a7bcc566cc45327c5cbb8da44144cdab687bd3b09a9";
 
 class User {
   static async signUp(
@@ -32,7 +29,7 @@ class User {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         res
-          .status(422)
+          .status(400)
           .json({ message: "Invalid Inputs", errors: errors.array() });
         return;
       }
@@ -79,17 +76,17 @@ class User {
 
       const accessToken = sign(
         { userId: user._id },
-        "veryverysuperhardsecretkeyyoucannotexpectit",
-        { expiresIn: "15s" }
+        process.env.JWT_SECRET,
+        { expiresIn: "15m" }
       );
 
       const randomString = crypto.randomBytes(40).toString("hex");
 
-      const oldRefreshToken = await RefreshTokenModel.findOneAndDelete({ userId: user._id });
+      await RefreshTokenModel.findOneAndDelete({ userId: user._id });
 
       const refreshToken = sign(
         { userId: user._id, randomString: randomString },
-        "veryverysuperhardsecretkeyyoucannotexpectit",
+        process.env.JWT_SECRET,
         { expiresIn: "60d" }
       );
 
@@ -101,27 +98,26 @@ class User {
       await refreshTokenDocument.save();
 
       res.cookie("accessToken", accessToken, {
-        secure: false,
+        secure: true,
         sameSite: "lax",
+        httpOnly: true,
       });
 
 
       res.cookie("refreshToken", refreshToken, {
-        secure: false,
+        secure: true,
         sameSite: "lax",
+        httpOnly: true,
       });
 
       const userWithoutPassword: IUser = user.toObject();
+      userWithoutPassword.id = user._id;
+      delete userWithoutPassword._id;
       delete userWithoutPassword.password;
-      delete userWithoutPassword.lists;
-      delete userWithoutPassword.watchList;
-      delete userWithoutPassword.ratedMovies;
-      delete userWithoutPassword.reviwes;
 
       res.status(200).json({
         message: "User Logged In",
         user: userWithoutPassword,
-        refreshToken,
       });
     } catch (error) {
       next(error);
@@ -135,15 +131,24 @@ class User {
   ): Promise<void> {
     const { movieId, userId } = req.body;
     try {
-      const movie = await Movie.findById(movieId);
-      if (!movie) {
-        res.status(404).json({ message: "Movie Not Found" });
-        return;
+
+      if (!mongoose.Types.ObjectId.isValid(movieId) || !mongoose.Types.ObjectId.isValid(userId)) {
+        const error = new createHttpError.NotAcceptable('not valid request')
+        throw error
       }
+
+      const movie = await Movie.findById(movieId);
+
+      if (!movie) {
+        const error = createHttpError[404]('movie not found')
+        throw (error)
+      }
+
       const user = await UserModel.findById(userId);
+
       if (!user) {
-        res.status(404).json({ message: "User Not Found" });
-        return;
+        const error = new createHttpError[404]('user not found')
+        throw error
       }
 
       if (user.watchList.includes(movieId)) {
@@ -155,7 +160,7 @@ class User {
       await user.save();
       res.status(200).json({ message: "Movie Added To WatchList", movie });
     } catch (error) {
-      res.status(500).json({ message: "Internal Server Error" });
+      next(error)
     }
   }
 
@@ -164,13 +169,22 @@ class User {
     res: Response,
     next: NextFunction
   ): Promise<void> {
-    const { movieId } = req.body;
+    const { movieId, userId } = req.body;
     try {
-      const user = await UserModel.findById(req.body.userId);
+      const user = await UserModel.findById(userId);
+
       if (!user) {
-        res.status(404).json({ message: "User Not Found" });
-        return;
+        const error = new createHttpError[404]('user not found')
+        throw error
       }
+
+      const movie = await Movie.findById(movieId)
+
+      if (!movie) {
+        const error = new createHttpError[404]('movie not found')
+        throw error
+      }
+
       user.watchList.pull(movieId);
       await user.save();
       res.status(200).json({ message: "Movie Removed From WatchList", user });
@@ -179,32 +193,83 @@ class User {
     }
   }
 
-  static async getWatchList(
+  static async fetchWatchList(
     req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> {
     const { userId } = req.params;
     try {
-      const user: IUser = await UserModel.findById(userId);
-      if (!user) {
-        res.status(404).json({ message: "User Not Found" });
-        return;
+
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        const error = new createHttpError.NotAcceptable('Not Authenticated')
+        throw error
       }
+      const userWithPopulatedWatchList = await UserModel.aggregate([
+        { $match: { _id: new mongoose.Types.ObjectId(userId) } },
+
+        {
+          $lookup: {
+            from: "movies",
+            localField: "watchList",
+            foreignField: "_id",
+            as: "watchList"
+          }
+        },
+
+        { $unwind: "$watchList" },
+
+        {
+          $lookup: {
+            from: "genres",
+            localField: "watchList.genre_ids",
+            foreignField: "id",
+            as: "watchList.genres"
+          }
+        },
+
+        {
+          $addFields: {
+            "watchList.genres": {
+              $map: {
+                input: "$watchList.genres",
+                as: "genre",
+                in: "$$genre.name"
+              }
+            }
+          }
+        },
+
+        {
+          $group: {
+            _id: "$_id",
+            watchList: { $push: "$watchList" }
+          }
+        },
+
+        {
+          $project: {
+            _id: 0,
+            watchList: 1
+          }
+        }
+      ]);
+
+
+
+      const userWithWatchList: IUser = userWithPopulatedWatchList[0];
+
+      if (!userWithWatchList) {
+        const error = new createHttpError[404]('user not found')
+        throw error
+      }
+
       res
         .status(200)
-        .json({ message: "User WatchList", watchList: user.watchList });
+        .json({ message: "User WatchList", watchList: userWithWatchList.watchList });
     } catch (error) {
       res.status(500).json({ message: "Internal Server Error" });
     }
-  }
-
-  static async checkToken(
-    req: Request,
-    res: Response,
-    next: NextFunction
-  ): Promise<void> {
-    res.status(200).json({ message: "Token Is Valid", cookies: req.cookies });
   }
 
   static async getUser(
@@ -222,10 +287,8 @@ class User {
 
       const userWithoutPassword: IUser = user.toObject();
       delete userWithoutPassword.password;
-      delete userWithoutPassword.lists;
-      delete userWithoutPassword.watchList;
-      delete userWithoutPassword.ratedMovies;
-      delete userWithoutPassword.reviwes;
+      userWithoutPassword.id = userWithoutPassword._id;
+      delete userWithoutPassword._id
       res
         .status(200)
         .json({ message: "User Found", user: userWithoutPassword });
@@ -233,6 +296,7 @@ class User {
       res.status(500).json({ message: "Internal Server Error" });
     }
   }
+
   static async sendRefreshToken(
     req: Request,
     res: Response,
@@ -258,29 +322,43 @@ class User {
       return
     }
 
-    const accessToken = sign({ userId: decodedToken.userId }, 'veryverysuperhardsecretkeyyoucannotexpectit', { expiresIn: "15s" })
+    const accessToken = sign({ userId: decodedToken.userId }, process.env.JWT_SECRET, { expiresIn: "15m" })
     const randomString = crypto.randomBytes(40).toString("hex");
 
-    const newRefreshToken = sign({ userId: decodedToken.userId, randomString: randomString }, 'veryverysuperhardsecretkeyyoucannotexpectit', { expiresIn: "60d" })
+    const newRefreshToken = sign({ userId: decodedToken.userId, randomString: randomString }, process.env.JWT_SECRET, { expiresIn: "60d" })
 
     refreshTokenDoc.randomString = randomString;
     await refreshTokenDoc.save();
 
     res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      secure: false,
+      secure: true,
       sameSite: "lax",
+      httpOnly: true,
     });
 
+
     res.cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
-      secure: false,
+      secure: true,
       sameSite: "lax",
+      httpOnly: true,
     });
 
     res.status(200).json({ message: "Token Refreshed" })
     return
+  }
 
+  static async logout(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      res.clearCookie("accessToken");
+      res.clearCookie("refreshToken");
+      res.status(200).json({ message: "Logged Out" });
+    } catch (error) {
+      res.status(500).json({ message: "Internal Server Error" });
+    }
   }
 }
 

@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
 import Genre from "../models/Genres";
-import Movie from "../models/Movies"
+import Movie, { IMovie } from "../models/Movies"
 import { Request, Response, NextFunction } from 'express';
+import { title } from "process";
 
 const Movies_Per_Page = 20;
 
@@ -21,7 +22,7 @@ class Movies {
             if (!movies) {
                 res.status(404).json({ message: 'No Movies Found' })
             }
-            res.status(200).json({ message: 'we got you some movies', movies: movies });
+            res.status(200).json({ message: 'we got you some movies', movies: movies, pageNumber: page });
         } catch (error) {
             next(error)
         }
@@ -33,7 +34,7 @@ class Movies {
             const { with_genres } = req.query;
             let movies: Movies[] = [];
             const convertedGenres = Array.isArray(with_genres) ? with_genres.map((genre: string) => +genre) : [];
-            movies = await Movie.find({ genre_ids: { $all: convertedGenres } });
+            movies = await Movie.find({ genre_ids: { $all: with_genres } });
 
             res.status(200).json({ message: 'we got you some movies', movies: movies });
         } catch (error) {
@@ -46,12 +47,26 @@ class Movies {
             const { id } = req.params;
             const movie = await Movie.aggregate([
                 { $match: { _id: new mongoose.Types.ObjectId(id) } },
-                { $lookup: { from: 'genres', localField: 'genre_ids', foreignField: 'id', as: 'genres' } }
+                { $lookup: { from: 'genres', localField: 'genre_ids', foreignField: 'id', as: 'genres' } },
+                {
+                    $addFields: {
+                        genres: { $map: { input: "$genres", as: "genre", in: "$$genre.name" } }
+                    }
+                }
             ]);
+
+
             if (!movie) {
                 res.status(404).json({ message: 'Movie Not Found' });
             }
-            res.status(200).json({ message: 'we got you the movie', movie: movie });
+
+            let movieToSend: IMovie = movie[0]
+
+            delete movieToSend.genre_ids
+            delete movieToSend.id
+            delete movieToSend.video
+
+            res.status(200).json({ message: 'we got you the movie', movie: movieToSend });
         } catch (error) {
             next(error)
         }

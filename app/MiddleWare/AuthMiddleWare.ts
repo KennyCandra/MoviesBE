@@ -34,9 +34,7 @@ class Auth {
       }
 
       req.body.userId = (decodedToken as DecodedToken).userId;
-      req.body.decodedToken = decodedToken;
       next();
-      return;
 
 
     } catch (error) {

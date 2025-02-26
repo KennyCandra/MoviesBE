@@ -6,7 +6,8 @@ export interface IUser extends mongoose.Document {
     lists: mongoose.Types.Array<Schema.Types.ObjectId>,
     watchList: mongoose.Types.Array<Schema.Types.ObjectId>,
     ratedMovies: mongoose.Types.Array<Schema.Types.ObjectId>,
-    reviwes: mongoose.Types.Array<Schema.Types.ObjectId>
+    reviwes: mongoose.Types.Array<Schema.Types.ObjectId>,
+    role : "user" | "admin";
 }
 
 const userScehma = new Schema<IUser>({
@@ -28,16 +29,20 @@ const userScehma = new Schema<IUser>({
     },
     watchList: {
         type: [Schema.Types.ObjectId],
-        ref: 'Movies',
+        ref: 'movies',
         default: []
     },
     ratedMovies: {
         type: [Schema.Types.ObjectId],
-        ref: 'Movies'
+        ref: 'movies'
     },
     reviwes: {
         type: [Schema.Types.ObjectId],
         ref: 'reviews'
+    },
+    role:{
+        default: 'user',
+        type: String
     }
 })
 

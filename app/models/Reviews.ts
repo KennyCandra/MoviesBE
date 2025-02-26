@@ -11,7 +11,7 @@ export interface IReviews extends Document {
 const reviewSchema = new Schema<IReviews>({
     movieId: {
         type: Schema.Types.ObjectId,
-        ref: 'Movies',
+        ref: 'movies',
         required: true
     },
     userId: {

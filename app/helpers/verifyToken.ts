@@ -8,7 +8,7 @@ export const verifyToken = async (
   try {
     const decodedToken = verify(
       token,
-      "veryverysuperhardsecretkeyyoucannotexpectit"
+      process.env.JWT_SECRET
     );
     return { decodedToken, expired: false };
   } catch (error) {
