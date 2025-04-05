@@ -75,7 +75,7 @@ class User {
       }
 
       const accessToken = sign(
-        { userId: user._id },
+        { userId: user._id, name: user.name },
         process.env.JWT_SECRET,
         { expiresIn: "15m" }
       );
@@ -97,13 +97,6 @@ class User {
 
       await refreshTokenDocument.save();
 
-      res.cookie("accessToken", accessToken, {
-        secure: true,
-        sameSite: "lax",
-        httpOnly: true,
-      });
-
-
       res.cookie("refreshToken", refreshToken, {
         secure: true,
         sameSite: "lax",
@@ -118,6 +111,7 @@ class User {
       res.status(200).json({
         message: "User Logged In",
         user: userWithoutPassword,
+        accessToken: accessToken
       });
     } catch (error) {
       next(error);
@@ -130,6 +124,8 @@ class User {
     next: NextFunction
   ): Promise<void> {
     const { movieId, userId } = req.body;
+
+    console.log(movieId)
     try {
 
       if (!mongoose.Types.ObjectId.isValid(movieId) || !mongoose.Types.ObjectId.isValid(userId)) {
@@ -183,6 +179,10 @@ class User {
       if (!movie) {
         const error = new createHttpError[404]('movie not found')
         throw error
+      }
+
+      if(!user.watchList.includes(movieId)){
+        const error = new createHttpError[409]("movie isn't in the list")
       }
 
       user.watchList.pull(movieId);
@@ -322,6 +322,13 @@ class User {
       return
     }
 
+    const user: IUser = await UserModel.findById(decodedToken.userId)
+
+    if (!user) {
+      res.status(401).json({ message: "Not Found" });
+      return
+    }
+
     const accessToken = sign({ userId: decodedToken.userId }, process.env.JWT_SECRET, { expiresIn: "15m" })
     const randomString = crypto.randomBytes(40).toString("hex");
 
@@ -330,12 +337,10 @@ class User {
     refreshTokenDoc.randomString = randomString;
     await refreshTokenDoc.save();
 
-    res.cookie("accessToken", accessToken, {
-      secure: true,
-      sameSite: "lax",
-      httpOnly: true,
-    });
-
+    const userWithoutPassword: IUser = user.toObject();
+    userWithoutPassword.id = user._id;
+    delete userWithoutPassword._id;
+    delete userWithoutPassword.password;
 
     res.cookie("refreshToken", newRefreshToken, {
       secure: true,
@@ -343,7 +348,11 @@ class User {
       httpOnly: true,
     });
 
-    res.status(200).json({ message: "Token Refreshed" })
+    res.status(200).json({
+      message: "Token Refreshed",
+      accessToken: accessToken,
+      user: user
+    })
     return
   }
 

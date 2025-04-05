@@ -25,7 +25,7 @@ router.post(
 
 router.post("/login", UserController.login);
 
-router.post("/watchlist/add", UserController.addToWatchList);
+router.post("/watchlist/add", Auth.checkToken, UserController.addToWatchList);
 
 router.delete('/watchlist/remove', Auth.checkToken, UserController.removeFromWatchList)
 

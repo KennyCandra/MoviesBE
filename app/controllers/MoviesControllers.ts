@@ -18,7 +18,43 @@ class Movies {
     static async fetchMoives(req: Request, res: Response, next: NextFunction) {
         try {
             const page = req.query.page || 1;
-            const movies = await Movie.find().limit(Movies_Per_Page).skip((+page - 1) * Movies_Per_Page);
+            const movies = await Movie.aggregate([
+                { $skip: (+page - 1) * Movies_Per_Page },
+                { $limit: Movies_Per_Page },
+                {
+                    $lookup: {
+                        foreignField: 'id',
+                        localField: "genre_ids",
+                        as: 'genres',
+                        from: 'genres'
+                    }
+                }, {
+                    $addFields: {
+                        genres: {
+                            $map: {
+                                input: "$genres",
+                                as: "genre",
+                                in: "$$genre.name"
+                            }
+                        }
+                    }
+                }, {
+                    $project: {
+                        genre_ids: 0,
+                        adult: 0,
+                        popularity: 0,
+                        __v: 0,
+                        vote_count: 0,
+                        vote_average: 0,
+                        video: 0,
+                        poster_path: 0,
+                        original_language: 0,
+                        id: 0,
+                        overview: 0,
+                        original_title: 0
+                    }
+                }
+            ])
             if (!movies) {
                 res.status(404).json({ message: 'No Movies Found' })
             }
@@ -45,28 +81,28 @@ class Movies {
     static async getMovieById(req: Request, res: Response, next: NextFunction) {
         try {
             const { id } = req.params;
-            const movie = await Movie.aggregate([
+            const [movie] = await Movie.aggregate([
                 { $match: { _id: new mongoose.Types.ObjectId(id) } },
                 { $lookup: { from: 'genres', localField: 'genre_ids', foreignField: 'id', as: 'genres' } },
                 {
                     $addFields: {
                         genres: { $map: { input: "$genres", as: "genre", in: "$$genre.name" } }
                     }
+                }, {
+                    $project: {
+                        genre_ids: 0,
+                        id: 0,
+                        video: 0
+                    }
                 }
-            ]);
+            ]) as IMovie[];
 
 
             if (!movie) {
                 res.status(404).json({ message: 'Movie Not Found' });
             }
 
-            let movieToSend: IMovie = movie[0]
-
-            delete movieToSend.genre_ids
-            delete movieToSend.id
-            delete movieToSend.video
-
-            res.status(200).json({ message: 'we got you the movie', movie: movieToSend });
+            res.status(200).json({ message: 'we got you the movie', movie });
         } catch (error) {
             next(error)
         }

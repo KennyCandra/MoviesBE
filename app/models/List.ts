@@ -1,7 +1,7 @@
 import mongoose, { Schema, model } from "mongoose";
 
 
-interface Ilist extends Document {
+export interface Ilist extends Document {
     name: string;
     description: string;
     movies: mongoose.Types.Array<Schema.Types.ObjectId>;

@@ -1,8 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../helpers/verifyToken";
-import { sign } from "jsonwebtoken";
-import crypto from "crypto";
-import RefreshTokenModel, { IRefreshToken } from "../models/RefreshToken";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -19,8 +16,8 @@ interface DecodedToken {
 class Auth {
   static async checkToken(req: Request, res: Response, next: NextFunction) {
     try {
-      const { accessToken } = req.cookies;
-
+      const accessToken = req.get('Authorization');
+      
       if (!accessToken) {
         res.status(401).json({ message: "Not Authenticated" });
         return;

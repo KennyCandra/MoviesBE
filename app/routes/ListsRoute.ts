@@ -14,10 +14,10 @@ router.post('/:listId', Auth.checkToken, ListController.addMovieToList)
 
 router.delete('/:listId', Auth.checkToken, ListController.removeFromList)
 
+router.get('/:userId/lists', ListController.getLists)
 
 router.get('/:listId', ListController.fetchList)
 
-router.get('/:userId/lists', ListController.getLists)
 
 
 

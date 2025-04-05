@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import User from "../models/User"; "./UserController";
-import List from "../models/List";
+import User, { IUser } from "../models/User"; "./UserController";
+import List, { Ilist } from "../models/List";
 import createHttpError from 'http-errors'
 import Movie from "../models/Movies";
 import mongoose from "mongoose";
@@ -22,14 +22,59 @@ class ListController {
                 throw error
             }
 
-            const user = await User.findById(userId).populate("lists");
+            const [user] = await User.aggregate([
+                { $match: { _id: new mongoose.Types.ObjectId(userId) } },
+                {
+                    $lookup: {
+                        from: 'lists',
+                        localField: 'lists',
+                        foreignField: '_id',
+                        pipeline:
+                            [
+                                {
+                                    $project: {
+                                        userId: 0
+                                    }
+                                }, {
+                                    $lookup: {
+                                        from: 'movies',
+                                        localField: 'movies',
+                                        foreignField: '_id',
+                                        as: 'movies',
+                                        pipeline: [
+                                            {
+                                                $lookup: {
+                                                    from: 'genres',
+                                                    localField: 'genre_ids',
+                                                    foreignField: 'id',
+                                                    as: 'genres'
+                                                }
+                                            },
+                                            {
+                                                $addFields: {
+                                                    genres: {
+                                                        $map: {
+                                                            input: "$genres",
+                                                            as: "genre",
+                                                            in: "$$genre.name"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    },
+                                }],
+                        as: 'lists'
+                    }
+                },
+
+            ]) as IUser[]
 
             if (!user) {
                 const error = new createHttpError.NotFound('Invalid Request')
                 throw error
             }
-            const listsCount = user.lists.length
-            res.status(200).json({ message: 'got you your lists', lists: user.lists, itemCount: listsCount })
+            res.status(200).json({ message: 'got you your lists', lists: user.lists })
         } catch (error) {
             return next(error)
         }
@@ -209,7 +254,35 @@ class ListController {
                 throw error
             }
 
-            const list = await List.findById(listId).populate('movies');
+            const [list] = await List.aggregate([
+                { $match: { _id: new mongoose.Types.ObjectId(listId) } },
+                {
+                    $lookup: {
+                        localField: 'movies',
+                        foreignField: '_id',
+                        from: 'movies',
+                        as: 'movies',
+                        pipeline: [{
+                            $lookup: {
+                                from: 'genres',
+                                localField: 'genre_ids',
+                                foreignField: 'id',
+                                as: 'genres'
+                            },
+                        }, {
+                            $addFields: {
+                                genres: {
+                                    $map: {
+                                        input: "$genres",
+                                        as: "genre",
+                                        in: "$$genre.name"
+                                    }
+                                }
+                            }
+                        }],
+                    }
+                }
+            ]) as Ilist[];
 
             if (!list) {
                 const error = new createHttpError.NotFound('List Not Found')
